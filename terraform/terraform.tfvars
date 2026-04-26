@@ -1,0 +1,9 @@
+ami_id              = "ami-0c7217cdde317cfec"
+my_ip               = "0.0.0.0"
+vpc_id              = "vpc-08964bf147d6dfbe8"
+public_subnet_id    = "subnet-0c70b1d049151bdf5"
+public_subnet_ids   = ["subnet-0c70b1d049151bdf5", "subnet-0d099154b5305b96a"]
+private_subnet_ids  = ["subnet-0a3182fa37782f562", "subnet-0862c771fff7b98b8"]
+jenkins_agent_sg_id = "sg-0c1d6cfba0f44e17a"
+key_name            = "jenkins-key"
+web_sg_id           = "sg-0c1d6cfba0f44e17a"

@@ -1,0 +1,154 @@
+// ─────────────────────────────────────────
+// Manual Rollback Pipeline — Task 7
+// Flips the ALB listener back to the other
+// target group (no parameters needed)
+// ─────────────────────────────────────────
+
+pipeline {
+    agent {
+        label 'linux-agent'
+    }
+
+    environment {
+        AWS_REGION = 'us-east-1'
+        ALB_NAME   = 'web-alb'
+    }
+
+    stages {
+        stage('Determine Current State') {
+            steps {
+                script {
+                    // Get the ALB ARN
+                    env.ALB_ARN = sh(
+                        script: """
+                            aws elbv2 describe-load-balancers \
+                              --names ${ALB_NAME} \
+                              --query 'LoadBalancers[0].LoadBalancerArn' \
+                              --output text \
+                              --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Get the listener ARN (port 80)
+                    env.LISTENER_ARN = sh(
+                        script: """
+                            aws elbv2 describe-listeners \
+                              --load-balancer-arn ${env.ALB_ARN} \
+                              --query 'Listeners[?Port==`80`].ListenerArn' \
+                              --output text \
+                              --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Get the current target group ARN
+                    env.CURRENT_TG_ARN = sh(
+                        script: """
+                            aws elbv2 describe-listeners \
+                              --listener-arns ${env.LISTENER_ARN} \
+                              --query 'Listeners[0].DefaultActions[0].TargetGroupArn' \
+                              --output text \
+                              --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Determine current and rollback colors
+                    env.CURRENT_COLOR = env.CURRENT_TG_ARN.contains('blue') ? 'blue' : 'green'
+                    env.ROLLBACK_COLOR = env.CURRENT_COLOR == 'blue' ? 'green' : 'blue'
+
+                    echo "Current live color: ${env.CURRENT_COLOR}"
+                    echo "Rolling back to: ${env.ROLLBACK_COLOR}"
+                }
+            }
+        }
+
+        stage('Verify Rollback Target Health') {
+            steps {
+                script {
+                    // Get the rollback target group ARN
+                    env.ROLLBACK_TG_ARN = sh(
+                        script: """
+                            aws elbv2 describe-target-groups \
+                              --names tg-${env.ROLLBACK_COLOR} \
+                              --query 'TargetGroups[0].TargetGroupArn' \
+                              --output text \
+                              --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Check target health
+                    def health = sh(
+                        script: """
+                            aws elbv2 describe-target-health \
+                              --target-group-arn ${env.ROLLBACK_TG_ARN} \
+                              --query 'TargetHealthDescriptions[*].TargetHealth.State' \
+                              --output text \
+                              --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Rollback target group health: ${health}"
+
+                    if (!health.contains('healthy')) {
+                        error "Rollback target group tg-${env.ROLLBACK_COLOR} has no healthy targets! Cannot rollback."
+                    }
+                }
+            }
+        }
+
+        stage('Switch Traffic') {
+            steps {
+                script {
+                    // Flip the listener to the rollback target group
+                    sh """
+                        aws elbv2 modify-listener \
+                          --listener-arn ${env.LISTENER_ARN} \
+                          --default-actions Type=forward,TargetGroupArn=${env.ROLLBACK_TG_ARN} \
+                          --region ${AWS_REGION}
+                    """
+
+                    echo "✅ Traffic switched from ${env.CURRENT_COLOR} to ${env.ROLLBACK_COLOR}"
+                }
+            }
+        }
+
+        stage('Log Rollback') {
+            steps {
+                script {
+                    def commitSha = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+
+                    def deployLog = """{
+  "timestamp": "${new Date().format('yyyy-MM-dd HH:mm:ss')}",
+  "git_sha": "${commitSha}",
+  "image_tag": "rollback",
+  "previous_color": "${env.CURRENT_COLOR}",
+  "new_color": "${env.ROLLBACK_COLOR}",
+  "result": "rolled-back"
+}"""
+
+                    writeFile file: 'rollback-entry.json', text: deployLog
+                    sh """
+                        # Append rollback entry to the deployment log in S3
+                        BUCKET=\$(aws s3 ls | grep devops-tfstate | awk '{print \$3}' | head -1)
+                        aws s3 cp rollback-entry.json s3://\$BUCKET/deployment-log.jsonl \
+                          --content-type application/json \
+                          --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Rollback completed: ${env.CURRENT_COLOR} → ${env.ROLLBACK_COLOR}"
+        }
+        failure {
+            echo "❌ Rollback FAILED — manual intervention required!"
+        }
+    }
+}

@@ -1,0 +1,34 @@
+// Sanity Check Pipeline — Task 1 Deliverable
+// Verifies that the Jenkins agent is properly connected and can execute commands
+
+pipeline {
+    agent {
+        label 'linux-agent'
+    }
+
+    stages {
+        stage('Sanity Check') {
+            steps {
+                echo 'hello'
+                echo "Running on agent: ${env.NODE_NAME}"
+                echo "Workspace: ${env.WORKSPACE}"
+                sh 'java -version'
+                sh 'git --version'
+                sh 'docker --version'
+                sh 'aws --version'
+                sh 'terraform --version'
+                sh 'node --version'
+                sh 'npm --version'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Sanity check PASSED — Agent is properly configured!'
+        }
+        failure {
+            echo 'Sanity check FAILED — Check agent configuration.'
+        }
+    }
+}

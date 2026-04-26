@@ -1,0 +1,7 @@
+# Trivy Ignore File
+# Each CVE listed here has been reviewed and deemed acceptable for this assignment.
+# Format: CVE-ID  # Justification
+
+# Example (uncomment and replace with actual CVEs if needed):
+# CVE-2023-xxxxx  # No fix available; does not affect our application's attack surface
+# CVE-2024-xxxxx  # Low impact; only affects feature we do not use

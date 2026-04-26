@@ -1,0 +1,171 @@
+// ─────────────────────────────────────────
+// Terraform CI/CD Pipeline — Task 6
+// Parameterized pipeline for managing Terraform
+// infrastructure from Assignment 3
+// ─────────────────────────────────────────
+
+pipeline {
+    agent {
+        label 'linux-agent'
+    }
+
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['plan', 'apply', 'destroy'],
+            description: 'Terraform action to perform'
+        )
+        booleanParam(
+            name: 'AUTO_APPROVE',
+            defaultValue: false,
+            description: 'Skip manual approval step (use with caution)'
+        )
+    }
+
+    environment {
+        TF_DIR           = 'assignment-4/terraform'
+        TF_PLAN_FILE     = 'tfplan'
+        AWS_REGION       = 'us-east-1'
+        TF_IN_AUTOMATION = 'true'
+    }
+
+    stages {
+        // ─── Stage 1: Checkout ────────────────────
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Action: ${params.ACTION}"
+                echo "Auto Approve: ${params.AUTO_APPROVE}"
+            }
+        }
+
+        // ─── Stage 2: Fmt & Validate ──────────────
+        stage('Fmt & Validate') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh 'terraform init -input=false'
+
+                    // Check formatting — fail if not properly formatted
+                    sh 'terraform fmt -check -recursive -diff'
+
+                    // Validate configuration
+                    sh 'terraform validate'
+                }
+            }
+        }
+
+        // ─── Stage 3: Security Scan (tfsec) ───────
+        stage('Security Scan') {
+            steps {
+                dir("${TF_DIR}") {
+                    // Run tfsec — fail on HIGH findings
+                    sh """
+                        tfsec . \
+                          --minimum-severity HIGH \
+                          --format json \
+                          --out tfsec-report.json \
+                          || true
+                    """
+
+                    // Also generate readable output
+                    sh """
+                        tfsec . \
+                          --minimum-severity HIGH \
+                          --format lovely \
+                          --out tfsec-report.txt
+                    """
+
+                    // Check if there are HIGH findings and fail
+                    script {
+                        def report = readJSON file: 'tfsec-report.json'
+                        def highFindings = report.results?.findAll { it.severity == 'HIGH' || it.severity == 'CRITICAL' }
+                        if (highFindings && highFindings.size() > 0) {
+                            echo "Found ${highFindings.size()} HIGH/CRITICAL findings:"
+                            highFindings.each { finding ->
+                                echo "  - ${finding.rule_id}: ${finding.description}"
+                            }
+                            error "tfsec found ${highFindings.size()} HIGH/CRITICAL findings. Fix them before proceeding."
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: "${TF_DIR}/tfsec-report.*", fingerprint: true
+                }
+            }
+        }
+
+        // ─── Stage 4: Plan ────────────────────────
+        stage('Plan') {
+            steps {
+                dir("${TF_DIR}") {
+                    script {
+                        if (params.ACTION == 'destroy') {
+                            sh "terraform plan -destroy -input=false -out=${TF_PLAN_FILE}"
+                        } else {
+                            sh "terraform plan -input=false -out=${TF_PLAN_FILE}"
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    // Archive the plan file
+                    archiveArtifacts artifacts: "${TF_DIR}/${TF_PLAN_FILE}", fingerprint: true
+                }
+            }
+        }
+
+        // ─── Stage 5: Manual Approval ─────────────
+        stage('Manual Approval') {
+            when {
+                allOf {
+                    expression { params.ACTION in ['apply', 'destroy'] }
+                    expression { !params.AUTO_APPROVE }
+                }
+            }
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    input(
+                        message: "Do you want to ${params.ACTION} the Terraform changes?",
+                        ok: "Yes, ${params.ACTION}",
+                        submitter: 'admin',
+                        parameters: [
+                            string(
+                                name: 'CONFIRM',
+                                defaultValue: '',
+                                description: "Type '${params.ACTION}' to confirm"
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+
+        // ─── Stage 6: Apply / Destroy ─────────────
+        stage('Apply/Destroy') {
+            when {
+                expression { params.ACTION in ['apply', 'destroy'] }
+            }
+            steps {
+                dir("${TF_DIR}") {
+                    // Apply the exact plan file that was reviewed
+                    sh "terraform apply -input=false ${TF_PLAN_FILE}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Terraform pipeline completed with action: ${params.ACTION}"
+        }
+        success {
+            echo "Terraform ${params.ACTION} completed successfully!"
+        }
+        failure {
+            echo "Terraform ${params.ACTION} FAILED — check the logs above."
+        }
+    }
+}

@@ -1,0 +1,17 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform.lock.hcl
+
+# SSH Keys - NEVER commit private keys
+jenkins-key.pem
+
+# Node
+node_modules/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db

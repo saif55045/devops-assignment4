@@ -1,0 +1,334 @@
+// ─────────────────────────────────────────
+// Main CI/CD Pipeline — Tasks 2, 4, 5, 7
+// Declarative pipeline with parallel test stages,
+// SonarQube analysis, Docker build + Trivy scan,
+// ECR push, and Blue-Green deployment
+// ─────────────────────────────────────────
+
+@Library('devops-shared-library') _
+
+pipeline {
+    agent {
+        label 'linux-agent'
+    }
+
+    environment {
+        // Inject Slack webhook secret without exposing it
+        SLACK_WEBHOOK = credentials('slack-webhook-url')
+
+        // AWS and Docker settings
+        AWS_REGION       = 'us-east-1'
+        ECR_REPO         = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-sample-app"
+        AWS_ACCOUNT_ID   = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+        IMAGE_TAG_SHA    = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        IMAGE_TAG_BRANCH = "${env.BRANCH_NAME ?: 'main'}"
+
+        // SonarQube settings
+        SONAR_PROJECT_KEY = 'devops-sample-app'
+    }
+
+    stages {
+        // ─── Stage 1: Checkout ────────────────────
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Branch: ${env.BRANCH_NAME}"
+                echo "Commit: ${IMAGE_TAG_SHA}"
+            }
+        }
+
+        // ─── Stage 2: Build ───────────────────────
+        stage('Build') {
+            steps {
+                dir('assignment-4/app') {
+                    sh 'npm ci'
+                    echo 'Dependencies installed successfully'
+                }
+            }
+        }
+
+        // ─── Stage 3: Static Analysis (SonarQube) ─
+        stage('Static Analysis') {
+            steps {
+                dir('assignment-4/app') {
+                    // Generate coverage for SonarQube
+                    sh 'npm run test:coverage || true'
+
+                    // Run SonarQube scanner
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            sonar-scanner \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.projectName='DevOps Sample App' \
+                              -Dsonar.sources=src \
+                              -Dsonar.tests=tests \
+                              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                              -Dsonar.testExecutionReportPaths=test-results/junit.xml
+                        """
+                    }
+                }
+            }
+        }
+
+        // ─── Stage 3b: Quality Gate ───────────────
+        stage('Quality Gate') {
+            steps {
+                // Wait for SonarQube webhook to report back
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        // ─── Stage 4: Test (Parallel) ─────────────
+        stage('Test') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        dir('assignment-4/app') {
+                            sh 'JEST_JUNIT_OUTPUT_DIR=test-results/unit npm run test:unit'
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'assignment-4/app/test-results/unit/**/*.xml'
+                        }
+                    }
+                }
+
+                stage('Integration Tests') {
+                    steps {
+                        dir('assignment-4/app') {
+                            sh 'JEST_JUNIT_OUTPUT_DIR=test-results/integration npm run test:int'
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'assignment-4/app/test-results/integration/**/*.xml'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─── Stage 5: Container Build ─────────────
+        stage('Container Build') {
+            steps {
+                dir('assignment-4/app') {
+                    script {
+                        // Build with two tags: commit SHA and branch name
+                        docker.build("devops-sample-app:${IMAGE_TAG_SHA}")
+                        sh "docker tag devops-sample-app:${IMAGE_TAG_SHA} devops-sample-app:${IMAGE_TAG_BRANCH}"
+                    }
+                }
+            }
+        }
+
+        // ─── Stage 6: Security Scan (Trivy) ───────
+        stage('Security Scan') {
+            steps {
+                dir('assignment-4/app') {
+                    // Run Trivy scan — fail on HIGH/CRITICAL with available fix
+                    sh """
+                        trivy image \
+                          --severity HIGH,CRITICAL \
+                          --ignore-unfixed \
+                          --ignorefile .trivyignore \
+                          --exit-code 1 \
+                          --format table \
+                          --output trivy-report.txt \
+                          devops-sample-app:${IMAGE_TAG_SHA} || true
+                    """
+
+                    // Also generate HTML report for archiving
+                    sh """
+                        trivy image \
+                          --severity HIGH,CRITICAL \
+                          --ignore-unfixed \
+                          --ignorefile .trivyignore \
+                          --exit-code 1 \
+                          --format template \
+                          --template '@/usr/local/share/trivy/templates/html.tpl' \
+                          --output trivy-report.html \
+                          devops-sample-app:${IMAGE_TAG_SHA}
+                    """
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'assignment-4/app/trivy-report.*', fingerprint: true
+                }
+            }
+        }
+
+        // ─── Stage 7: Push to ECR ─────────────────
+        stage('Push to ECR') {
+            steps {
+                script {
+                    // Authenticate to ECR using IAM role (no long-lived keys)
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ECR_REPO}
+                    """
+
+                    // Tag and push both tags
+                    sh """
+                        docker tag devops-sample-app:${IMAGE_TAG_SHA} ${ECR_REPO}:${IMAGE_TAG_SHA}
+                        docker tag devops-sample-app:${IMAGE_TAG_BRANCH} ${ECR_REPO}:${IMAGE_TAG_BRANCH}
+                        docker push ${ECR_REPO}:${IMAGE_TAG_SHA}
+                        docker push ${ECR_REPO}:${IMAGE_TAG_BRANCH}
+                    """
+                }
+            }
+        }
+
+        // ─── Stage 8: Deploy Production (Blue-Green) ──
+        stage('Deploy Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    // Determine which color is currently live
+                    def listenerArn = sh(
+                        script: """
+                            aws elbv2 describe-listeners \
+                              --load-balancer-arn \$(aws elbv2 describe-load-balancers \
+                                --names web-alb \
+                                --query 'LoadBalancers[0].LoadBalancerArn' \
+                                --output text) \
+                              --query 'Listeners[?Port==`80`].ListenerArn' \
+                              --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    def currentTgArn = sh(
+                        script: """
+                            aws elbv2 describe-rules \
+                              --listener-arn ${listenerArn} \
+                              --query 'Rules[0].Actions[0].TargetGroupArn' \
+                              --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    // Determine blue or green
+                    def currentColor = currentTgArn.contains('blue') ? 'blue' : 'green'
+                    def newColor = currentColor == 'blue' ? 'green' : 'blue'
+                    def newAsg = "asg-${newColor}"
+                    def newTg = "tg-${newColor}"
+
+                    echo "Current live: ${currentColor}, deploying to: ${newColor}"
+
+                    // Update the idle ASG's launch template to use the new image
+                    sh """
+                        # Get the launch template ID for the idle ASG
+                        LT_ID=\$(aws autoscaling describe-auto-scaling-groups \
+                          --auto-scaling-group-names ${newAsg} \
+                          --query 'AutoScalingGroups[0].LaunchTemplate.LaunchTemplateId' \
+                          --output text)
+
+                        # Create a new launch template version with the new image
+                        aws ec2 create-launch-template-version \
+                          --launch-template-id \$LT_ID \
+                          --source-version '\$Latest' \
+                          --launch-template-data '{"ImageId":"${env.AMI_ID}"}'
+
+                        # Trigger instance refresh on the idle ASG
+                        aws autoscaling start-instance-refresh \
+                          --auto-scaling-group-name ${newAsg} \
+                          --preferences '{"MinHealthyPercentage":50}'
+                    """
+
+                    // Wait for targets to become healthy
+                    def newTgArn = sh(
+                        script: """
+                            aws elbv2 describe-target-groups \
+                              --names ${newTg} \
+                              --query 'TargetGroups[0].TargetGroupArn' \
+                              --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    timeout(time: 10, unit: 'MINUTES') {
+                        waitUntil {
+                            def health = sh(
+                                script: """
+                                    aws elbv2 describe-target-health \
+                                      --target-group-arn ${newTgArn} \
+                                      --query 'TargetHealthDescriptions[*].TargetHealth.State' \
+                                      --output text
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            echo "Target health: ${health}"
+                            return health.contains('healthy')
+                        }
+                    }
+
+                    // Smoke test via test listener (port 8081)
+                    def smokeResult = sh(
+                        script: """
+                            ALB_DNS=\$(aws elbv2 describe-load-balancers \
+                              --names web-alb \
+                              --query 'LoadBalancers[0].DNSName' \
+                              --output text)
+                            curl -sf http://\$ALB_DNS:8081/health
+                        """,
+                        returnStatus: true
+                    )
+
+                    if (smokeResult != 0) {
+                        error "Smoke test FAILED on ${newColor}. NOT switching traffic. The ${currentColor} environment remains live."
+                    }
+
+                    // Switch ALB listener to the new target group
+                    sh """
+                        aws elbv2 modify-listener \
+                          --listener-arn ${listenerArn} \
+                          --default-actions Type=forward,TargetGroupArn=${newTgArn}
+                    """
+
+                    echo "Traffic switched from ${currentColor} to ${newColor}"
+
+                    // Log deployment to S3
+                    def deployLog = """{"timestamp":"${new Date().format('yyyy-MM-dd HH:mm:ss')}","git_sha":"${IMAGE_TAG_SHA}","image_tag":"${ECR_REPO}:${IMAGE_TAG_SHA}","previous_color":"${currentColor}","new_color":"${newColor}","result":"success"}"""
+
+                    writeFile file: 'deploy-entry.json', text: deployLog
+                    sh """
+                        aws s3 cp deploy-entry.json s3://devops-tfstate-\$(aws s3 ls | grep devops-tfstate | awk '{print \$3}' | head -1 | sed 's/devops-tfstate-//')/deployment-log.jsonl --content-type application/json
+                    """
+                }
+            }
+        }
+    }
+
+    // ─── Post Actions ─────────────────────────────
+    post {
+        always {
+            // Archive build artifacts
+            archiveArtifacts artifacts: 'assignment-4/app/test-results/**/*.xml', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'assignment-4/app/coverage/**/*', allowEmptyArchive: true
+        }
+
+        success {
+            // Send Slack notification on success (using shared library)
+            notifySlack([
+                message: "✅ Build #${env.BUILD_NUMBER} SUCCEEDED\nBranch: ${env.BRANCH_NAME}\nCommit: ${IMAGE_TAG_SHA}\n${env.BUILD_URL}",
+                channel: '#devops-builds',
+                color: 'good'
+            ])
+        }
+
+        failure {
+            // Send Slack notification on failure (using shared library)
+            notifySlack([
+                message: "❌ Build #${env.BUILD_NUMBER} FAILED\nBranch: ${env.BRANCH_NAME}\nFailing stage: ${env.STAGE_NAME}\n${env.BUILD_URL}",
+                channel: '#devops-builds',
+                color: 'danger'
+            ])
+        }
+    }
+}

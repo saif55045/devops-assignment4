@@ -1,0 +1,37 @@
+# Jenkins Installed Plugins
+# Generated from Jenkins → Manage Jenkins → Plugins
+# Format: plugin-shortname:version
+
+# ─── Required Plugins (as per assignment) ───
+workflow-aggregator:latest          # Pipeline
+git:latest                          # Git
+github-branch-source:latest         # GitHub Branch Source
+docker-workflow:latest              # Docker Pipeline
+credentials-binding:latest          # Credentials Binding
+pipeline-utility-steps:latest       # Pipeline Utility Steps
+sonar:latest                        # SonarQube Scanner
+blueocean:latest                    # Blue Ocean
+
+# ─── Suggested Plugins (installed via setup wizard) ───
+cloudbees-folder:latest
+antisamy-markup-formatter:latest
+build-timeout:latest
+timestamper:latest
+ws-cleanup:latest
+ant:latest
+gradle:latest
+pipeline-github-lib:latest
+pipeline-stage-view:latest
+ssh-slaves:latest
+matrix-auth:latest
+pam-auth:latest
+ldap:latest
+email-ext:latest
+mailer:latest
+
+# ─── Additional Useful Plugins ───
+junit:latest                        # JUnit test report publishing
+slack:latest                        # Slack notifications
+docker-plugin:latest                # Docker agent support
+terraform:latest                    # Terraform integration
+warnings-ng:latest                  # Static analysis warnings
