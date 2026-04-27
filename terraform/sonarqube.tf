@@ -10,13 +10,13 @@ resource "aws_security_group" "sonarqube_sg" {
   description = "Allow SonarQube (9000) from my IP and Jenkins agent SG"
   vpc_id      = var.vpc_id
 
-  # SonarQube UI from your IP only
+  # SonarQube UI - open access
   ingress {
     description = "SonarQube from my IP"
     from_port   = 9000
     to_port     = 9000
     protocol    = "tcp"
-    cidr_blocks = ["${var.my_ip}/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # SonarQube from Jenkins agent SG (for scanner to report)
@@ -28,13 +28,13 @@ resource "aws_security_group" "sonarqube_sg" {
     security_groups = [var.jenkins_agent_sg_id]
   }
 
-  # SSH from your IP
+  # SSH - open access
   ingress {
     description = "SSH from my IP"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["${var.my_ip}/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # All outbound

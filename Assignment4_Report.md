@@ -153,13 +153,14 @@ The Test stage runs Unit Tests and Integration Tests concurrently using a `paral
 - **Multibranch Pipeline**: Configured with GitHub Branch Source for automatic branch/PR discovery
 - **GitHub Webhook**: Configured to trigger builds on push
 
-**Deliverable screenshots needed:**
-- [ ] Blue Ocean visualization of successful pipeline
-- [ ] Parallel stage view inside Test stage
-- [ ] JUnit test report page
-- [ ] Slack messages (success + failure)
-- [ ] GitHub webhook configuration
-- [ ] PR build with Jenkins status check
+**Deliverable screenshots:**
+
+![alt text](image-5.png)
+![alt text](image-6.png)
+![alt text](image-7.png)
+![alt text](image-8.png)
+![alt text](image-9.png)
+![alt text](image-10.png)
 
 ---
 
@@ -219,10 +220,11 @@ post {
 }
 ```
 
-**Deliverable screenshots needed:**
-- [ ] Library registered in Manage Jenkins → System
-- [ ] Build log showing "Loading library devops-shared-library@main"
-- [ ] Before/after diff of Jenkinsfile
+**Deliverable screenshots:**
+
+![alt text](image-11.png)
+![alt text](image-12.png)
+![alt text](image-13.png)
 
 ---
 
@@ -276,11 +278,12 @@ Using **Jest** with `--coverage` flag, generating LCOV reports passed to SonarQu
 -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 ```
 
-**Deliverable screenshots needed:**
-- [ ] SonarQube dashboard (Reliability, Security, Maintainability, Coverage)
-- [ ] Quality Gate configuration with edited coverage condition
-- [ ] Console log: waitForQualityGate returning OK
-- [ ] Quality Gate failure (intentionally lowered coverage)
+**Deliverable screenshots:**
+
+![alt text](image-14.png)
+![alt text](image-15.png)
+![alt text](image-16.png)
+![alt text](image-17.png)
 
 ---
 
@@ -335,13 +338,14 @@ IAM Policy includes: `ecr:GetAuthorizationToken`, `ecr:PutImage`, `ecr:BatchGetI
 **Failing scan**: Pin an older base image (e.g., `node:16-alpine`) → Trivy detects HIGH CVEs
 **Passing scan**: Update to `node:18-alpine` → All HIGH/CRITICAL CVEs resolved
 
-**Deliverable screenshots needed:**
-- [ ] Dockerfile with multi-stage structure highlighted
-- [ ] ECR console showing both tags and lifecycle policy
-- [ ] IAM role with policy attached to agent
-- [ ] Jenkins console: failing Trivy scan
-- [ ] Jenkins console: passing Trivy scan
-- [ ] Archived Trivy report
+**Deliverable screenshots:**
+
+![alt text](image-18.png)
+![alt text](image-19.png)
+![alt text](image-20.png)
+![alt text](image-21.png)
+![alt text](image-22.png)
+![alt text](image-23.png)
 
 ---
 
@@ -398,13 +402,14 @@ stage('Manual Approval') {
 
 Uses S3 backend with DynamoDB table (`terraform-state-lock`) from Assignment 3.
 
-**Deliverable screenshots needed:**
-- [ ] Job configuration with parameter form
-- [ ] Console output of each stage (fmt, validate, tfsec, plan, apply)
-- [ ] Manual Approval prompt
-- [ ] Archived tfsec report
-- [ ] DynamoDB lock entry during apply
-- [ ] Second concurrent run blocked
+**Deliverable screenshots:**
+
+![alt text](image-24.png)
+![alt text](image-25.png)
+![alt text](image-26.png)
+![alt text](image-27.png)
+![alt text](image-28.png)
+![alt text](image-29.png)
 
 ---
 
@@ -448,11 +453,12 @@ Each deployment appends a JSON line to `deployment-log.jsonl`:
 {"timestamp":"2026-04-26 20:00:00","git_sha":"a1b2c3d","image_tag":"...","previous_color":"blue","new_color":"green","result":"success"}
 ```
 
-**Deliverable screenshots needed:**
-- [ ] Architecture diagram (included above)
-- [ ] Both target groups with healthy targets
-- [ ] ALB listener rule before and after switch
-- [ ] Successful deployment console output
-- [ ] Failed smoke test (no switch)
-- [ ] Manual rollback job
-- [ ] S3 deployment log (≥3 entries)
+**Deliverable screenshots:**
+
+![alt text](image-30.png)
+![alt text](image-31.png)
+![alt text](image-32.png)
+![alt text](image-33.png)
+![alt text](image-34.png)
+![alt text](image-35.png)
+![alt text](image-36.png)
