@@ -63,7 +63,8 @@ pipeline {
                               -Dsonar.sources=src \
                               -Dsonar.tests=tests \
                               -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                              -Dsonar.testExecutionReportPaths=test-results/junit.xml
+                              -Dsonar.testExecutionReportPaths=test-results/junit.xml \
+                              -Dsonar.host.url=http://3.231.105.220:9000
                         """
                     }
                 }
