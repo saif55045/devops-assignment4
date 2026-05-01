@@ -110,11 +110,11 @@ The `user_data` script installs: Java 17, Jenkins LTS, Git, Docker, AWS CLI v2, 
 Created a Pipeline job using `pipelines/Jenkinsfile.sanity` that runs `echo hello` on the agent — **passed successfully**.
 
 **Deliverable screenshots needed:**
-![alt text](image.png)
-![alt text](image-1.png)
-![alt text](image-2.png)
-![alt text](image-3.png)
-![alt text](image-4.png)
+![alt text](images/image.png)
+![alt text](images/image-1.png)
+![alt text](images/image-2.png)
+![alt text](images/image-3.png)
+![alt text](images/image-4.png)
 
 ---
 
@@ -155,12 +155,12 @@ The Test stage runs Unit Tests and Integration Tests concurrently using a `paral
 
 **Deliverable screenshots:**
 
-![alt text](image-5.png)
-![alt text](image-6.png)
-![alt text](image-7.png)
-![alt text](image-8.png)
-![alt text](image-9.png)
-![alt text](image-10.png)
+![alt text](images/image-5.png)
+![alt text](images/image-6.png)
+![alt text](images/image-7.png)
+![alt text](images/image-8.png)
+![alt text](images/image-9.png)
+![alt text](images/image-10.png)
 
 ---
 
@@ -222,9 +222,8 @@ post {
 
 **Deliverable screenshots:**
 
-![alt text](image-11.png)
-![alt text](image-12.png)
-![alt text](image-13.png)
+![alt text](images/image-11.png)
+![alt text](images/image-12.png)
 
 ---
 
@@ -280,11 +279,9 @@ Using **Jest** with `--coverage` flag, generating LCOV reports passed to SonarQu
 
 **Deliverable screenshots:**
 
-![alt text](image-14.png)
-![alt text](image-15.png)
-![alt text](image-16.png)
-![alt text](image-17.png)
-
+![alt text](images/image-14.png)
+![alt text](images/image-19.png)
+![alt text](images/image-18.png)
 ---
 
 ## Task 5: Docker Build, Vulnerability Scanning, and ECR Push
@@ -340,12 +337,10 @@ IAM Policy includes: `ecr:GetAuthorizationToken`, `ecr:PutImage`, `ecr:BatchGetI
 
 **Deliverable screenshots:**
 
-![alt text](image-18.png)
-![alt text](image-19.png)
-![alt text](image-20.png)
-![alt text](image-21.png)
-![alt text](image-22.png)
-![alt text](image-23.png)
+![alt text](images/image-15.png)
+![alt text](images/image-16.png)
+![alt text](images/image-17.png)
+![alt text](images/image-20.png)
 
 ---
 
@@ -404,12 +399,12 @@ Uses S3 backend with DynamoDB table (`terraform-state-lock`) from Assignment 3.
 
 **Deliverable screenshots:**
 
-![alt text](image-24.png)
-![alt text](image-25.png)
-![alt text](image-26.png)
-![alt text](image-27.png)
-![alt text](image-28.png)
-![alt text](image-29.png)
+![alt text](images/image-21.png)
+![alt text](images/image-22.png)
+![alt text](images/image-23.png)
+![alt text](images/image-24.png)
+![alt text](images/image-25.png)
+![alt text](images/image-26.png)
 
 ---
 
@@ -455,10 +450,10 @@ Each deployment appends a JSON line to `deployment-log.jsonl`:
 
 **Deliverable screenshots:**
 
-![alt text](image-30.png)
-![alt text](image-31.png)
-![alt text](image-32.png)
-![alt text](image-33.png)
-![alt text](image-34.png)
-![alt text](image-35.png)
-![alt text](image-36.png)
+![alt text](images/image-27.png)
+![alt text](images/image-28.png)
+![alt text](images/image-29.png)
+![alt text](images/image-30.png)
+![alt text](images/image-31.png)
+![alt text](images/image-32.png)
+![alt text](images/image-33.png)
